@@ -9,26 +9,46 @@ import pygame
 from .settings import FPS, WIDTH, HEIGHT
 from .game_states import (
     MainMenu, Playing, Credits,
-    GameOver, YouWin, PauseMenu, OptionsMenu
+    GameOver, YouWin, PauseMenu, OptionsMenu, STATE_REGISTRY
 )
 from .ui_manager import UIManager
 from .audio_manager import AudioManager
+from .interfaces import IAudio
+from .services import ConfigService, GameSettingsService, ScoreService
 from .save_system import load_high_scores, save_player_score  # High score system
 
 
 class GameController:
     def init_states(self):
-        """Game states'leri başlat"""
-        self.states = {
-            'main_menu': MainMenu(self),
-            'playing': None,
-            'credits': Credits(self),
-            'game_over': None,  # Skor ile oluşturulacak
-            'you_win': None,    # Skor ile oluşturulacak
-            'save_load': None
-        }
-        self.current_state = self.states['main_menu']
-    def __init__(self):
+        """Game states'leri başlat.
+        
+        Uses STATE_REGISTRY for OCP: new states can be added without modifying
+        this method. Some states (playing, game_over, you_win) are created 
+        on-demand with runtime parameters.
+        """
+        self.states = {}
+        
+        # Auto-initialize simple states from registry
+        for key, state_class in STATE_REGISTRY.items():
+            # Some states need constructor args; skip them for lazy init
+            if key in ('game_over', 'you_win', 'highscore_entry'):
+                self.states[key] = None  # Will be created when needed
+            else:
+                try:
+                    self.states[key] = state_class(self)
+                except TypeError:
+                    # If constructor signature changed, fallback
+                    self.states[key] = None
+        
+        # Special: playing is created on-demand via start_game()
+        self.states['playing'] = None
+        
+        # Set initial state
+        self.current_state = self.states.get('main_menu')
+    def __init__(self, audio: IAudio | None = None,
+                 config_service: ConfigService | None = None,
+                 game_settings_service: GameSettingsService | None = None,
+                 score_service: ScoreService | None = None):
         pygame.init()
         self.base_resolution = (WIDTH, HEIGHT)
         self.last_screen_size = self.base_resolution
@@ -46,7 +66,11 @@ class GameController:
         self.running = True
         self.clock = pygame.time.Clock()
         self.ui_manager = UIManager()
-        self.audio_manager = AudioManager()
+        # Dependency Injection with sensible defaults
+        self.audio_manager = audio or AudioManager()
+        self.config_service = config_service or ConfigService()
+        self.game_settings_service = game_settings_service or GameSettingsService()
+        self.score_service = score_service or ScoreService()
         
         # States'leri başlat
         self.init_states()
@@ -138,7 +162,7 @@ class GameController:
         # Oyun durumunda mıyız kontrol et
         is_in_game = isinstance(self.current_state, Playing)
         # Önceki müziği kaydet
-        previous_music = self.audio_manager.current_music
+        previous_music = getattr(self.audio_manager, 'current_music', None)
         # Yeni options menüsü oluştur
         new_options = OptionsMenu(self, return_to_pause=return_to_pause)
         # Eğer oyundaysak, options menüsü kapatıldığında oyun müziğine dönmek için kaydet
@@ -225,15 +249,13 @@ class GameController:
             self.current_state.init_music()
 
     def reset_game_settings(self):
-        """Oyun ayarlarını yükle ve hız ayarlarını gizle"""
-        try:
-            with open('game_settings.json', 'r') as f:
-                settings = json.load(f)
-                settings['show_speed_settings'] = False  # Hız ayarlarını gizle
-            with open('game_settings.json', 'w') as f:
-                json.dump(settings, f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+        """Oyun ayarlarında gizli hız ayarlarını kapat.
+
+        Uses GameSettingsService to avoid raw file I/O here.
+        """
+        settings = self.game_settings_service.load()
+        settings['show_speed_settings'] = False
+        self.game_settings_service.save(settings)
 
     def quit_game(self):
         self.audio_manager.save_settings()  # Ses ayarlarını kaydet

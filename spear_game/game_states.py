@@ -1180,4 +1180,22 @@ class YouWin(GameState):
             draw_text(congratulations_text, self.CREDITS_FONT, YELLOW, screen, WIDTH // 2, HEIGHT // 2 + 500, center_align=True)
 
 
+
+
 # SaveLoadMenu ve slot sistemi kaldırıldı. Yüksek skor sistemi için yeni ekran eklenecek.
+
+
+# ============================================================================
+# STATE REGISTRY for Open/Closed Principle
+# ============================================================================
+# To add a new state, simply register it here. Controller can auto-discover.
+STATE_REGISTRY = {
+    'main_menu': MainMenu,
+    'credits': Credits,
+    'pause': PauseMenu,
+    'options': OptionsMenu,
+    'game_over': GameOver,
+    'you_win': YouWin,
+    'highscore_entry': HighScoreEntry,
+    # 'playing' is special (created on-demand with music flag)
+}
