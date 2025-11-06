@@ -235,10 +235,25 @@ class PauseMenu(GameState):
                             self.controller.back_to_menu()
 
     def draw(self, screen):
-        # Yarı şeffaf siyah arka plan için yeni surface oluştur
+        # Önce alttaki Playing state'ini çiz (pause edilmiş hali)
+        playing_state = self.controller.states.get('playing')
+        if playing_state and hasattr(playing_state, 'draw'):
+            playing_state.draw(screen)
+            
+            # Blur efekti uygula: küçült-büyüt yöntemiyle hızlı blur
+            blur_factor = 8  # Ne kadar küçültüleceği (yüksek = daha bulanık)
+            small_size = (WIDTH // blur_factor, HEIGHT // blur_factor)
+            
+            # Ekranı küçült
+            small_surface = pygame.transform.smoothscale(screen, small_size)
+            # Tekrar büyüt (blur efekti)
+            blurred = pygame.transform.smoothscale(small_surface, (WIDTH, HEIGHT))
+            screen.blit(blurred, (0, 0))
+        
+        # Yarı şeffaf siyah arka plan - daha düşük alpha ile oyun net görünsün
         overlay = pygame.Surface((WIDTH, HEIGHT))
         overlay.fill((0, 0, 0))
-        overlay.set_alpha(180)  # 180/255 opaklık (0=tamamen şeffaf, 255=opak)
+        overlay.set_alpha(120)  # 120/255 opaklık - daha şeffaf, oyun daha net görünür
         screen.blit(overlay, (0, 0))
         
         # PAUSE yazısını ekranın üst kısmına çiz
@@ -252,7 +267,7 @@ class PauseMenu(GameState):
             # Buton arka planı (yarı şeffaf)
             button_bg = pygame.Surface((rect.width, rect.height))
             button_bg.fill((60, 60, 60))
-            button_bg.set_alpha(150)
+            button_bg.set_alpha(200)  # Butonlar biraz daha opak
             screen.blit(button_bg, rect)
             
             # Buton çerçevesi
